@@ -1,0 +1,1464 @@
+import React, { useState, useMemo } from 'react';
+
+export default function App() {
+  // Navigation & Session State
+  const [currentPage, setCurrentPage] = useState('login');
+  const [userSession, setUserSession] = useState(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [activeTab, setActiveTab] = useState('all'); // general tab helper
+  
+  // Custom Toast / Banner Notification System
+  const [notification, setNotification] = useState(null);
+  const triggerNotification = (message, type = 'success') => {
+    setNotification({ message, type });
+    setTimeout(() => setNotification(null), 4000);
+  };
+
+  // Prepopulated Nursing Staff Data
+  const [staffList, setStaffList] = useState([
+    { id: 'ST-001', name: 'Jane Doe, RN', role: 'Nurse Administrator', dept: 'ICU', email: 'j.doe@hospital.org', shift: 'Morning', status: 'On-Duty' },
+    { id: 'ST-002', name: 'Sarah Jenkins, BSN', role: 'Head Nurse', dept: 'Emergency', email: 's.jenkins@hospital.org', shift: 'Night', status: 'On-Duty' },
+    { id: 'ST-003', name: 'Michael Chen, RN', role: 'Staff Nurse', dept: 'Pediatrics', email: 'm.chen@hospital.org', shift: 'Afternoon', status: 'On-Duty' },
+    { id: 'ST-004', name: 'Amanda Rodriguez, RN', role: 'Staff Nurse', dept: 'ICU', email: 'a.rodriguez@hospital.org', shift: 'Off', status: 'Off-Duty' },
+    { id: 'ST-005', name: 'David Kim, BSN', role: 'Informatics Nurse Specialist', dept: 'Clinical IT', email: 'd.kim@hospital.org', shift: 'Morning', status: 'On-Duty' },
+  ]);
+
+  // Prepopulated Patient Data with interactive clinical vitals
+  const [patientList, setPatientList] = useState([
+    {
+      id: 'PT-8801',
+      name: 'Robert H. Miller',
+      age: 64,
+      gender: 'Male',
+      bed: 'ICU-Bed 04',
+      diagnosis: 'Acute Coronary Syndrome (ACS)',
+      admissionDate: '2026-05-18',
+      attendingPhysician: 'Dr. Evelyn Vance, MD',
+      history: ['Hypertension (10 years)', 'Type 2 Diabetes', 'Coronary Stent Placement in 2021'],
+      vitals: { hr: 84, bp: '138/88', temp: 37.1, spo2: 97, lastUpdated: '10 mins ago' }
+    },
+    {
+      id: 'PT-4219',
+      name: 'Elena Rostova',
+      age: 28,
+      gender: 'Female',
+      bed: 'Ward C-12',
+      diagnosis: 'Severe Pyelonephritis',
+      admissionDate: '2026-05-19',
+      attendingPhysician: 'Dr. Gregory Chase, MD',
+      history: ['Asthma (Mild, Intermittent)', 'Penicillin Allergy'],
+      vitals: { hr: 105, bp: '105/65', temp: 38.9, spo2: 99, lastUpdated: '5 mins ago' } // High HR, High Temp (Fever)
+    },
+    {
+      id: 'PT-1082',
+      name: 'Thomas Wayne Jr.',
+      age: 72,
+      gender: 'Male',
+      bed: 'ER-Bay 02',
+      diagnosis: 'COPD Exacerbation',
+      admissionDate: '2026-05-20',
+      attendingPhysician: 'Dr. Allison Cameron, MD',
+      history: ['COPD (Stage III)', 'Chronic Atrial Fibrillation', 'Former Heavy Smoker'],
+      vitals: { hr: 92, bp: '142/90', temp: 36.6, spo2: 89, lastUpdated: 'Just now' } // Low SpO2
+    },
+    {
+      id: 'PT-7725',
+      name: 'Sophia Beatrice Lim',
+      age: 9,
+      gender: 'Female',
+      bed: 'Pediatrics-08',
+      diagnosis: 'Acute Appendicitis (Post-Op)',
+      admissionDate: '2026-05-19',
+      attendingPhysician: 'Dr. Eric Foreman, MD',
+      history: ['No known significant medical history', 'NKDA'],
+      vitals: { hr: 78, bp: '110/70', temp: 36.8, spo2: 98, lastUpdated: '1 hour ago' }
+    }
+  ]);
+
+  // Selected patient details target
+  const [selectedPatientId, setSelectedPatientId] = useState('PT-8801');
+
+  // Modals & Forms State
+  const [isUserModalOpen, setIsUserModalOpen] = useState(false);
+  const [editingUser, setEditingUser] = useState(null);
+  const [userForm, setUserForm] = useState({ name: '', role: 'Staff Nurse', dept: 'ICU', email: '', shift: 'Morning', status: 'On-Duty' });
+
+  const [isVitalsModalOpen, setIsVitalsModalOpen] = useState(false);
+  const [vitalsForm, setVitalsForm] = useState({ hr: '', bp: '', temp: '', spo2: '' });
+
+  const [isPatientModalOpen, setIsPatientModalOpen] = useState(false);
+  const [patientForm, setPatientForm] = useState({ name: '', age: '', gender: 'Male', bed: '', diagnosis: '', attendingPhysician: '', history: '' });
+
+  // Handle Login submission
+  const [loginForm, setLoginForm] = useState({ username: '', password: '' });
+  const [loginError, setLoginError] = useState('');
+
+  const handleLogin = (e) => {
+    e.preventDefault();
+    if (loginForm.username.trim().toLowerCase() === 'admin' && loginForm.password === 'admin') {
+      setUserSession({ name: 'Admin Jane Doe, RN', role: 'Nurse Administrator', avatar: 'JD' });
+      setCurrentPage('dashboard');
+      triggerNotification('Welcome to MedPulse NIS! Logged in as Administrator.');
+      setLoginError('');
+    } else if (loginForm.username.trim() && loginForm.password) {
+      setUserSession({ name: loginForm.username + ', RN', role: 'Staff Nurse', avatar: loginForm.username.substring(0, 2).toUpperCase() });
+      setCurrentPage('dashboard');
+      triggerNotification(`Welcome! Logged in as ${loginForm.username}`);
+      setLoginError('');
+    } else {
+      setLoginError('Please enter a username and password (Use admin / admin for demo)');
+    }
+  };
+
+  const handleDemoLogin = () => {
+    setLoginForm({ username: 'admin', password: 'admin' });
+    setUserSession({ name: 'Jane Doe, RN', role: 'Nurse Administrator', avatar: 'JD' });
+    setCurrentPage('dashboard');
+    triggerNotification('Welcome! Logged in with demo credentials.');
+  };
+
+  const handleLogout = () => {
+    setUserSession(null);
+    setCurrentPage('login');
+    setLoginForm({ username: '', password: '' });
+    triggerNotification('Logged out successfully.', 'info');
+  };
+
+  // CRUD User Management Operations
+  const openUserAddModal = () => {
+    setEditingUser(null);
+    setUserForm({ name: '', role: 'Staff Nurse', dept: 'ICU', email: '', shift: 'Morning', status: 'On-Duty' });
+    setIsUserModalOpen(true);
+  };
+
+  const openUserEditModal = (user) => {
+    setEditingUser(user.id);
+    setUserForm({ name: user.name, role: user.role, dept: user.dept, email: user.email, shift: user.shift, status: user.status });
+    setIsUserModalOpen(true);
+  };
+
+  const saveUserSubmit = (e) => {
+    e.preventDefault();
+    if (!userForm.name || !userForm.email) {
+      triggerNotification('Please fill in all required fields.', 'error');
+      return;
+    }
+
+    if (editingUser) {
+      setStaffList(staffList.map(u => u.id === editingUser ? { ...u, ...userForm } : u));
+      triggerNotification('Staff nurse updated successfully!');
+    } else {
+      const newId = `ST-00${staffList.length + 1}`;
+      setStaffList([...staffList, { id: newId, ...userForm }]);
+      triggerNotification('New staff nurse added successfully!');
+    }
+    setIsUserModalOpen(false);
+  };
+
+  const deleteUser = (userId) => {
+    setStaffList(staffList.filter(u => u.id !== userId));
+    triggerNotification('User deleted from registry.', 'warning');
+  };
+
+  // Patient Registration & Vitals Operations
+  const openVitalsEditModal = (patient) => {
+    setSelectedPatientId(patient.id);
+    setVitalsForm({
+      hr: patient.vitals.hr,
+      bp: patient.vitals.bp,
+      temp: patient.vitals.temp,
+      spo2: patient.vitals.spo2
+    });
+    setIsVitalsModalOpen(true);
+  };
+
+  const saveVitalsSubmit = (e) => {
+    e.preventDefault();
+    setPatientList(patientList.map(p => {
+      if (p.id === selectedPatientId) {
+        return {
+          ...p,
+          vitals: {
+            hr: Number(vitalsForm.hr),
+            bp: vitalsForm.bp,
+            temp: Number(vitalsForm.temp),
+            spo2: Number(vitalsForm.spo2),
+            lastUpdated: 'Just now'
+          }
+        };
+      }
+      return p;
+    }));
+    triggerNotification('Patient vitals successfully updated.');
+    setIsVitalsModalOpen(false);
+  };
+
+  const openPatientAddModal = () => {
+    setPatientForm({ name: '', age: '', gender: 'Male', bed: '', diagnosis: '', attendingPhysician: '', history: '' });
+    setIsPatientModalOpen(true);
+  };
+
+  const savePatientSubmit = (e) => {
+    e.preventDefault();
+    if (!patientForm.name || !patientForm.diagnosis || !patientForm.bed) {
+      triggerNotification('Name, diagnosis, and bed location are required.', 'error');
+      return;
+    }
+    const newPatient = {
+      id: `PT-${Math.floor(1000 + Math.random() * 9000)}`,
+      name: patientForm.name,
+      age: Number(patientForm.age) || 30,
+      gender: patientForm.gender,
+      bed: patientForm.bed,
+      diagnosis: patientForm.diagnosis,
+      admissionDate: new Date().toISOString().split('T')[0],
+      attendingPhysician: patientForm.attendingPhysician || 'Unassigned Staff MD',
+      history: patientForm.history ? patientForm.history.split(',').map(s => s.trim()) : ['No previous recorded history'],
+      vitals: { hr: 75, bp: '120/80', temp: 36.7, spo2: 98, lastUpdated: 'Initial Reading' }
+    };
+
+    setPatientList([newPatient, ...patientList]);
+    setSelectedPatientId(newPatient.id);
+    triggerNotification('New patient admitted & registered.');
+    setIsPatientModalOpen(false);
+  };
+
+  // Filter lists based on Search queries
+  const filteredStaff = useMemo(() => {
+    return staffList.filter(nurse => 
+      nurse.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      nurse.dept.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      nurse.role.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+  }, [staffList, searchQuery]);
+
+  const filteredPatients = useMemo(() => {
+    return patientList.filter(pat => 
+      pat.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      pat.diagnosis.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      pat.bed.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+  }, [patientList, searchQuery]);
+
+  // Selected Patient computed lookup
+  const selectedPatient = patientList.find(p => p.id === selectedPatientId) || patientList[0];
+
+  // Helper logic to check vitals thresholds
+  const getVitalAlertLevel = (type, val, bpVal = '') => {
+    if (type === 'hr') {
+      return (val < 60 || val > 100) ? 'critical' : 'normal';
+    }
+    if (type === 'temp') {
+      return (val < 36.0 || val > 38.0) ? 'warning' : 'normal';
+    }
+    if (type === 'spo2') {
+      return val < 95 ? 'critical' : (val < 97 ? 'warning' : 'normal');
+    }
+    if (type === 'bp') {
+      const sys = parseInt(bpVal.split('/')[0]) || 120;
+      return (sys > 140 || sys < 90) ? 'warning' : 'normal';
+    }
+    return 'normal';
+  };
+
+  return (
+    <div className="min-h-screen bg-slate-50 text-slate-800 font-sans flex flex-col antialiased">
+      
+      {/* Dynamic Toast Alerts */}
+      {notification && (
+        <div className="fixed top-5 right-5 z-50 animate-bounce max-w-sm flex items-center p-4 rounded-xl shadow-2xl bg-white border-l-4 border-teal-500 text-slate-800 transition duration-300">
+          <div className="mr-3 text-teal-500">
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+          </div>
+          <div className="flex-1">
+            <h4 className="text-sm font-bold text-slate-900">System Notification</h4>
+            <p className="text-xs text-slate-600">{notification.message}</p>
+          </div>
+          <button onClick={() => setNotification(null)} className="ml-4 text-slate-400 hover:text-slate-600">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
+          </button>
+        </div>
+      )}
+
+      {/* ----------------- PAGE 1: LOGIN PAGE ----------------- */}
+      {currentPage === 'login' && (
+        <div className="flex-1 flex flex-col md:flex-row bg-gradient-to-tr from-slate-900 via-indigo-950 to-teal-950">
+          {/* Brand Left Column */}
+          <div className="md:w-1/2 flex flex-col justify-center px-10 py-16 text-white md:border-r border-slate-800/50">
+            <div className="max-w-md mx-auto space-y-6">
+              <div className="inline-flex items-center space-x-2 bg-teal-500/10 border border-teal-500/30 px-3 py-1.5 rounded-full text-teal-400 text-sm font-semibold tracking-wide">
+                <svg className="w-4 h-4 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" /></svg>
+                <span>Clinical Information Suite v4.2</span>
+              </div>
+              <h1 className="text-4xl md:text-5xl font-black tracking-tight leading-none bg-gradient-to-r from-teal-400 via-cyan-200 to-indigo-300 bg-clip-text text-transparent">
+                MedPulse NIS
+              </h1>
+              <p className="text-slate-300 text-lg">
+                Empowering frontline nurses with intelligent nursing informatics, real-time vital analysis, smart shift planning, and direct electronic health record integrations.
+              </p>
+              
+              <div className="pt-6 border-t border-slate-800 space-y-3 text-sm text-slate-400">
+                <div className="flex items-center space-x-3">
+                  <span className="w-2 h-2 rounded-full bg-teal-400"></span>
+                  <span>Fully integrated Nursing Care Plan (NCP) engine</span>
+                </div>
+                <div className="flex items-center space-x-3">
+                  <span className="w-2 h-2 rounded-full bg-indigo-400"></span>
+                  <span>Real-time duty rosters & automated check-ins</span>
+                </div>
+                <div className="flex items-center space-x-3">
+                  <span className="w-2 h-2 rounded-full bg-cyan-400"></span>
+                  <span>HIPAA-compliant cryptographic patient security logs</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Login Right Column */}
+          <div className="md:w-1/2 flex items-center justify-center p-8 bg-slate-900/40">
+            <div className="w-full max-w-md bg-white/10 backdrop-blur-md rounded-2xl p-8 border border-white/10 shadow-2xl">
+              <div className="text-center mb-8">
+                <div className="w-16 h-16 bg-gradient-to-tr from-teal-400 to-indigo-500 rounded-2xl flex items-center justify-center mx-auto shadow-lg mb-4">
+                  <svg className="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                </div>
+                <h2 className="text-2xl font-bold text-white">Staff Authentication</h2>
+                <p className="text-slate-400 text-sm mt-1">Authorized clinical personnel access only</p>
+              </div>
+
+              {loginError && (
+                <div className="mb-4 p-3 bg-red-500/20 border border-red-500/30 rounded-lg text-xs text-red-300">
+                  {loginError}
+                </div>
+              )}
+
+              <form onSubmit={handleLogin} className="space-y-5">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">Username</label>
+                  <div className="relative">
+                    <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-400">
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
+                    </span>
+                    <input 
+                      type="text" 
+                      placeholder="Enter 'admin'" 
+                      value={loginForm.username}
+                      onChange={(e) => setLoginForm({ ...loginForm, username: e.target.value })}
+                      className="w-full bg-slate-900/60 border border-slate-700 rounded-xl py-3 pl-10 pr-4 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-teal-400 focus:border-transparent text-sm"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">Password</label>
+                  <div className="relative">
+                    <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-400">
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
+                    </span>
+                    <input 
+                      type="password" 
+                      placeholder="Enter 'admin'" 
+                      value={loginForm.password}
+                      onChange={(e) => setLoginForm({ ...loginForm, password: e.target.value })}
+                      className="w-full bg-slate-900/60 border border-slate-700 rounded-xl py-3 pl-10 pr-4 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-teal-400 focus:border-transparent text-sm"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between text-xs text-slate-400 pt-1">
+                  <label className="flex items-center space-x-2 cursor-pointer">
+                    <input type="checkbox" className="rounded bg-slate-800 border-slate-700 text-teal-500 focus:ring-0" defaultChecked />
+                    <span>Remember terminal</span>
+                  </label>
+                  <a href="#reset" onClick={(e) => { e.preventDefault(); triggerNotification('Contact System Admin to reset credential certificates.', 'info'); }} className="hover:text-teal-400 transition">Forgot password?</a>
+                </div>
+
+                <button 
+                  type="submit" 
+                  className="w-full bg-gradient-to-r from-teal-400 to-indigo-500 hover:from-teal-500 hover:to-indigo-600 text-white font-bold py-3.5 px-4 rounded-xl shadow-lg transform hover:-translate-y-0.5 active:translate-y-0 transition-all text-sm tracking-wide"
+                >
+                  Access System Portal
+                </button>
+              </form>
+
+              <div className="relative my-6 text-center">
+                <hr className="border-slate-800" />
+                <span className="bg-slate-900 px-3 text-xs text-slate-400 absolute left-1/2 -translate-x-1/2 -top-2">OR</span>
+              </div>
+
+              {/* Instant One-Click Demo Access */}
+              <button 
+                onClick={handleDemoLogin}
+                className="w-full bg-slate-800 hover:bg-slate-750 text-teal-400 border border-teal-500/20 hover:border-teal-500/55 font-semibold py-3 px-4 rounded-xl transition text-xs"
+              >
+                Instant Supervisor Demo Login
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* AFTER LOGIN WRAPPER: Navigation Sidebar & Headers */}
+      {currentPage !== 'login' && (
+        <div className="flex-1 flex flex-col md:flex-row">
+          
+          {/* Main Navigation Sidebar */}
+          <aside className="md:w-64 bg-slate-900 text-slate-300 flex flex-col border-r border-slate-800">
+            {/* Top Logo / Identity */}
+            <div className="p-6 border-b border-slate-800 flex items-center space-x-3">
+              <div className="w-10 h-10 bg-teal-500 rounded-lg flex items-center justify-center text-white font-bold shadow-md">
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05(15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" /></svg>
+              </div>
+              <div>
+                <span className="block font-black text-white text-lg tracking-tight">MedPulse</span>
+                <span className="block text-xs text-teal-400 tracking-wider font-semibold uppercase">Nursing Portal</span>
+              </div>
+            </div>
+
+            {/* Current Logged-In User Profile summary */}
+            <div className="p-4 bg-slate-950/40 border-b border-slate-800/80 flex items-center space-x-3">
+              <div className="w-9 h-9 rounded-full bg-indigo-500/20 border border-indigo-400/30 flex items-center justify-center text-indigo-300 font-bold text-xs">
+                {userSession?.avatar || 'JD'}
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-bold text-white truncate">{userSession?.name || 'Administrator'}</p>
+                <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">{userSession?.role || 'Admin Staff'}</p>
+              </div>
+              <span className="flex h-2 w-2 relative">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+              </span>
+            </div>
+
+            {/* Navigation links */}
+            <nav className="flex-1 p-4 space-y-1.5">
+              <button 
+                onClick={() => { setCurrentPage('dashboard'); setSearchQuery(''); }}
+                className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl transition text-sm font-semibold ${currentPage === 'dashboard' ? 'bg-gradient-to-r from-teal-500/20 to-indigo-500/10 text-white border-l-4 border-teal-500' : 'hover:bg-slate-850 hover:text-white'}`}
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v4a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v4a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v4a2 2 0 01-2 2H6a2 2 0 01-2-2v-4zM14 16a2 2 0 012-2h2a2 2 0 012 2v4a2 2 0 01-2 2h-2a2 2 0 01-2-2v-4z" /></svg>
+                <span>Dashboard</span>
+              </button>
+
+              <button 
+                onClick={() => { setCurrentPage('schedule'); setSearchQuery(''); }}
+                className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl transition text-sm font-semibold ${currentPage === 'schedule' ? 'bg-gradient-to-r from-teal-500/20 to-indigo-500/10 text-white border-l-4 border-teal-500' : 'hover:bg-slate-850 hover:text-white'}`}
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                <span>Nursing Schedule</span>
+              </button>
+
+              <button 
+                onClick={() => { setCurrentPage('patients'); setSearchQuery(''); }}
+                className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl transition text-sm font-semibold ${currentPage === 'patients' ? 'bg-gradient-to-r from-teal-500/20 to-indigo-500/10 text-white border-l-4 border-teal-500' : 'hover:bg-slate-850 hover:text-white'}`}
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
+                <span>Patients & Vitals</span>
+              </button>
+
+              <button 
+                onClick={() => { setCurrentPage('users'); setSearchQuery(''); }}
+                className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl transition text-sm font-semibold ${currentPage === 'users' ? 'bg-gradient-to-r from-teal-500/20 to-indigo-500/10 text-white border-l-4 border-teal-500' : 'hover:bg-slate-850 hover:text-white'}`}
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+                <span>Staff Management</span>
+              </button>
+
+              <button 
+                onClick={() => { setCurrentPage('bio'); setSearchQuery(''); }}
+                className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl transition text-sm font-semibold ${currentPage === 'bio' ? 'bg-gradient-to-r from-teal-500/20 to-indigo-500/10 text-white border-l-4 border-teal-500' : 'hover:bg-slate-850 hover:text-white'}`}
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" /></svg>
+                <span>Group Biography</span>
+              </button>
+            </nav>
+
+            {/* Logout button at bottom */}
+            <div className="p-4 border-t border-slate-800">
+              <button 
+                onClick={handleLogout}
+                className="w-full flex items-center space-x-3 px-4 py-2.5 rounded-xl hover:bg-red-500/15 hover:text-red-400 text-slate-400 text-sm font-bold transition"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>
+                <span>Exit Portal</span>
+              </button>
+            </div>
+          </aside>
+
+          {/* Main Workspace Frame */}
+          <main className="flex-1 flex flex-col min-w-0 bg-slate-50">
+            
+            {/* Top Workspace Header */}
+            <header className="bg-white border-b border-slate-200 h-16 flex items-center justify-between px-6 shrink-0 shadow-sm">
+              <div className="flex items-center space-x-4">
+                <span className="text-xl font-bold text-slate-800 uppercase tracking-wide">
+                  {currentPage === 'dashboard' && 'Clinical Informatics Desk'}
+                  {currentPage === 'schedule' && 'Clinical Schedule Grid'}
+                  {currentPage === 'patients' && 'Integrated Patient EHR Flowsheets'}
+                  {currentPage === 'users' && 'Active Nursing Roster'}
+                  {currentPage === 'bio' && 'NURSING INFORMATICS COLLABORATORS'}
+                </span>
+              </div>
+
+              {/* Dynamic global search and instant notification bells */}
+              <div className="flex items-center space-x-4">
+                {currentPage !== 'bio' && (
+                  <div className="relative hidden sm:block">
+                    <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-400 pointer-events-none">
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                    </span>
+                    <input 
+                      type="text" 
+                      placeholder="Search record identifiers..." 
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="bg-slate-100 text-slate-800 placeholder-slate-400 border border-slate-200 rounded-lg py-1.5 pl-9 pr-4 text-xs focus:outline-none focus:ring-2 focus:ring-teal-400 focus:bg-white w-56"
+                    />
+                    {searchQuery && (
+                      <button onClick={() => setSearchQuery('')} className="absolute right-2 top-2 text-slate-400 hover:text-slate-600 text-xs">Clear</button>
+                    )}
+                  </div>
+                )}
+
+                <div className="flex items-center space-x-2">
+                  <span className="px-2 py-1 text-[10px] font-bold bg-teal-100 text-teal-800 border border-teal-200 rounded-md">WARD A - SECURE</span>
+                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
+                </div>
+              </div>
+            </header>
+
+            {/* Dynamic Content Panel */}
+            <div className="flex-1 p-6 overflow-y-auto">
+
+              {/* ----------------- PAGE 2: DASHBOARD PAGE ----------------- */}
+              {currentPage === 'dashboard' && (
+                <div className="space-y-6">
+                  
+                  {/* Welcome Panel Card with modern visual elements */}
+                  <div className="bg-gradient-to-r from-teal-500 to-indigo-600 rounded-2xl p-6 text-white shadow-lg relative overflow-hidden">
+                    <div className="absolute right-0 bottom-0 opacity-10 pointer-events-none">
+                      <svg className="w-96 h-96 -mr-16 -mb-16" fill="currentColor" viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
+                    </div>
+                    
+                    <div className="relative z-10 space-y-2">
+                      <span className="bg-white/20 border border-white/25 px-2.5 py-1 rounded-full text-[11px] font-bold tracking-widest uppercase">STATION CONTROL CONSOLE</span>
+                      <h2 className="text-3xl font-extrabold">Welcome back, {userSession?.name || 'Administrator'}</h2>
+                      <p className="text-teal-50 max-w-2xl text-sm font-medium">
+                        Your system terminal is synchronized. The ICU and General Wards are fully monitored. 3 critical vitals parameters are active. Ensure regular flowsheet logging.
+                      </p>
+                      
+                      <div className="pt-4 flex flex-wrap gap-2">
+                        <button onClick={() => { setCurrentPage('patients'); }} className="bg-white text-teal-900 font-bold px-4 py-2 rounded-lg text-xs shadow hover:bg-teal-50 transition">
+                          View Flowsheets
+                        </button>
+                        <button onClick={openPatientAddModal} className="bg-teal-400 hover:bg-teal-300 text-slate-900 font-bold px-4 py-2 rounded-lg text-xs shadow transition">
+                          Admit New Patient
+                        </button>
+                        <button onClick={() => triggerNotification('Clinical emergency broadcast was simulated. No real alarms tripped.', 'warning')} className="bg-red-500 hover:bg-red-600 text-white font-bold px-4 py-2 rounded-lg text-xs shadow transition flex items-center space-x-1.5">
+                          <span className="inline-block w-2 h-2 rounded-full bg-white animate-ping"></span>
+                          <span>Emergency broadcast</span>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Summary Metric Cards Row */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm hover:shadow transition flex items-center space-x-4">
+                      <div className="w-12 h-12 bg-teal-50 rounded-xl flex items-center justify-center text-teal-500">
+                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
+                      </div>
+                      <div>
+                        <p className="text-xs text-slate-400 font-semibold uppercase">Total Care Staff</p>
+                        <p className="text-2xl font-black text-slate-900">{staffList.length}</p>
+                        <p className="text-[10px] text-teal-600 font-bold mt-0.5">⚡ {staffList.filter(s => s.status === 'On-Duty').length} Currently On-Duty</p>
+                      </div>
+                    </div>
+
+                    <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm hover:shadow transition flex items-center space-x-4">
+                      <div className="w-12 h-12 bg-indigo-50 rounded-xl flex items-center justify-center text-indigo-500">
+                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+                      </div>
+                      <div>
+                        <p className="text-xs text-slate-400 font-semibold uppercase">Patient Census</p>
+                        <p className="text-2xl font-black text-slate-900">{patientList.length}</p>
+                        <p className="text-[10px] text-indigo-600 font-bold mt-0.5">🏨 100% Ward bed occupancy</p>
+                      </div>
+                    </div>
+
+                    <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm hover:shadow transition flex items-center space-x-4">
+                      <div className="w-12 h-12 bg-rose-50 rounded-xl flex items-center justify-center text-rose-500">
+                        <svg className="w-6 h-6 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" /></svg>
+                      </div>
+                      <div>
+                        <p className="text-xs text-slate-400 font-semibold uppercase">Critical Flags</p>
+                        <p className="text-2xl font-black text-rose-600">2 Patients</p>
+                        <p className="text-[10px] text-rose-500 font-bold mt-0.5">⚠️ SpO2 Alert & Temperature Spike</p>
+                      </div>
+                    </div>
+
+                    <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm hover:shadow transition flex items-center space-x-4">
+                      <div className="w-12 h-12 bg-amber-50 rounded-xl flex items-center justify-center text-amber-500">
+                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                      </div>
+                      <div>
+                        <p className="text-xs text-slate-400 font-semibold uppercase">Pending Shifts</p>
+                        <p className="text-2xl font-black text-slate-900">4 Slots</p>
+                        <p className="text-[10px] text-amber-600 font-bold mt-0.5">⏳ Upcoming Afternoon Shift Change</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Main Analytics & Activity Section */}
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    {/* Simulated EHR Charts / Clinical Metrics */}
+                    <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm lg:col-span-2 space-y-4">
+                      <div className="flex justify-between items-center pb-4 border-b border-slate-100">
+                        <div>
+                          <h3 className="font-extrabold text-slate-800 text-base">Ward Admission Metrics</h3>
+                          <p className="text-xs text-slate-400">Total hospital traffic vs critical emergencies</p>
+                        </div>
+                        <div className="flex items-center space-x-2 text-[10px] font-bold">
+                          <span className="flex items-center"><span className="w-2.5 h-2.5 rounded-full bg-teal-500 mr-1"></span> ICU Admissions</span>
+                          <span className="flex items-center"><span className="w-2.5 h-2.5 rounded-full bg-indigo-500 mr-1"></span> ER Trauma</span>
+                        </div>
+                      </div>
+
+                      {/* CSS-based Bar / Progress Grid simulation representing clinical admissions */}
+                      <div className="space-y-4 py-2">
+                        <div>
+                          <div className="flex justify-between text-xs text-slate-500 mb-1">
+                            <span>Monday (Admissions peak)</span>
+                            <span className="font-bold">14 ICU Cases</span>
+                          </div>
+                          <div className="w-full bg-slate-100 h-3 rounded-full overflow-hidden">
+                            <div className="bg-teal-500 h-full rounded-full transition-all duration-500" style={{ width: '85%' }}></div>
+                          </div>
+                        </div>
+
+                        <div>
+                          <div className="flex justify-between text-xs text-slate-500 mb-1">
+                            <span>Tuesday (Observation wards)</span>
+                            <span className="font-bold">10 General Cases</span>
+                          </div>
+                          <div className="w-full bg-slate-100 h-3 rounded-full overflow-hidden">
+                            <div className="bg-indigo-500 h-full rounded-full" style={{ width: '60%' }}></div>
+                          </div>
+                        </div>
+
+                        <div>
+                          <div className="flex justify-between text-xs text-slate-500 mb-1">
+                            <span>Wednesday (Today's statistics)</span>
+                            <span className="font-bold">12 Trauma Cases</span>
+                          </div>
+                          <div className="w-full bg-slate-100 h-3 rounded-full overflow-hidden">
+                            <div className="bg-gradient-to-r from-teal-500 to-indigo-500 h-full rounded-full" style={{ width: '75%' }}></div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Quick access buttons block */}
+                      <div className="pt-4 border-t border-slate-100 grid grid-cols-2 gap-3">
+                        <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
+                          <p className="text-xs text-slate-400 font-semibold mb-1">Informatics Quick-Link</p>
+                          <a href="#schedule" onClick={(e) => { e.preventDefault(); setCurrentPage('schedule'); }} className="text-xs text-indigo-600 hover:text-indigo-800 font-bold inline-flex items-center">
+                            Manage Rosters &rarr;
+                          </a>
+                        </div>
+                        <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
+                          <p className="text-xs text-slate-400 font-semibold mb-1">System Audit</p>
+                          <a href="#users" onClick={(e) => { e.preventDefault(); setCurrentPage('users'); }} className="text-xs text-teal-600 hover:text-teal-800 font-bold inline-flex items-center">
+                            User Privileges &rarr;
+                          </a>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Right-hand Clinical Log and Nurse Activity Stream */}
+                    <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+                      <div>
+                        <h3 className="font-extrabold text-slate-800 text-base">Real-time Activity Feed</h3>
+                        <p className="text-xs text-slate-400">Chronological nursing system audits</p>
+                      </div>
+
+                      <div className="space-y-4 overflow-y-auto max-h-[240px] pr-1">
+                        <div className="flex items-start space-x-3 text-xs border-b border-slate-50 pb-2">
+                          <div className="w-2 h-2 rounded-full bg-teal-500 mt-1.5 shrink-0"></div>
+                          <div>
+                            <p className="font-bold text-slate-700">Admitted Elena Rostova</p>
+                            <p className="text-[10px] text-slate-400">Assigned Room Ward C-12 • Just Now</p>
+                          </div>
+                        </div>
+
+                        <div className="flex items-start space-x-3 text-xs border-b border-slate-50 pb-2">
+                          <div className="w-2 h-2 rounded-full bg-indigo-500 mt-1.5 shrink-0"></div>
+                          <div>
+                            <p className="font-bold text-slate-700">Thomas Wayne Jr Vitals Spike</p>
+                            <p className="text-[10px] text-slate-400">SpO2 level recorded at 89% • 5 mins ago</p>
+                          </div>
+                        </div>
+
+                        <div className="flex items-start space-x-3 text-xs border-b border-slate-50 pb-2">
+                          <div className="w-2 h-2 rounded-full bg-emerald-500 mt-1.5 shrink-0"></div>
+                          <div>
+                            <p className="font-bold text-slate-700">Roster Update</p>
+                            <p className="text-[10px] text-slate-400">Sarah Jenkins checked in for Night Shift • 30 mins ago</p>
+                          </div>
+                        </div>
+
+                        <div className="flex items-start space-x-3 text-xs border-b border-slate-50 pb-2">
+                          <div className="w-2 h-2 rounded-full bg-slate-400 mt-1.5 shrink-0"></div>
+                          <div>
+                            <p className="font-bold text-slate-700">Database Synchronized</p>
+                            <p className="text-[10px] text-slate-400">HL7 interfaces reported 100% transmission • 1 hour ago</p>
+                          </div>
+                        </div>
+                      </div>
+                      
+                      <button 
+                        onClick={() => triggerNotification('Activity history exported to CSV report')}
+                        className="w-full py-2.5 bg-slate-100 text-slate-700 hover:bg-slate-200 text-xs font-bold rounded-xl transition"
+                      >
+                        Export System Audit Trail
+                      </button>
+                    </div>
+                  </div>
+
+                </div>
+              )}
+
+              {/* ----------------- PAGE 3: NURSING SCHEDULE PAGE ----------------- */}
+              {currentPage === 'schedule' && (
+                <div className="space-y-6">
+                  
+                  {/* Filter Toolbar */}
+                  <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                    <div className="space-y-1">
+                      <h3 className="font-bold text-slate-800">Operational Shifts Registry</h3>
+                      <p className="text-xs text-slate-400">Active roster for 7-day rolling rotation</p>
+                    </div>
+                    
+                    <div className="flex flex-wrap gap-2">
+                      {['All', 'ICU', 'Emergency', 'Pediatrics', 'Clinical IT'].map((dept) => (
+                        <button
+                          key={dept}
+                          onClick={() => {
+                            setActiveTab(dept.toLowerCase());
+                            triggerNotification(`Filtered schedule by ${dept} Department`, 'info');
+                          }}
+                          className={`px-3 py-1.5 text-xs font-bold rounded-lg transition ${activeTab === dept.toLowerCase() ? 'bg-teal-500 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
+                        >
+                          {dept}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Schedule Calendar Grid / Roster Table */}
+                  <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left border-collapse">
+                        <thead>
+                          <tr className="bg-slate-50 text-xs font-bold text-slate-500 border-b border-slate-100 uppercase">
+                            <th className="p-4">Nurse / Staff Practitioner</th>
+                            <th className="p-4">Primary Department</th>
+                            <th className="p-4">Mon</th>
+                            <th className="p-4">Tue</th>
+                            <th className="p-4">Wed</th>
+                            <th className="p-4">Thu</th>
+                            <th className="p-4">Fri</th>
+                            <th className="p-4">Sat</th>
+                            <th className="p-4">Sun</th>
+                            <th className="p-4">Shift Assignment</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100 text-xs text-slate-600">
+                          {staffList
+                            .filter(nurse => activeTab === 'all' || nurse.dept.toLowerCase() === activeTab)
+                            .map((nurse) => (
+                              <tr key={nurse.id} className="hover:bg-slate-50/50 transition">
+                                <td className="p-4">
+                                  <div className="font-bold text-slate-800">{nurse.name}</div>
+                                  <div className="text-[10px] text-slate-400">ID: {nurse.id}</div>
+                                </td>
+                                <td className="p-4">
+                                  <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-600 font-bold">{nurse.dept}</span>
+                                </td>
+                                <td className="p-4 font-semibold text-teal-600">Morning</td>
+                                <td className="p-4 font-semibold text-indigo-600">Afternoon</td>
+                                <td className="p-4 font-semibold text-teal-600">Morning</td>
+                                <td className="p-4 font-semibold text-rose-600">Night</td>
+                                <td className="p-4 text-slate-400">Off</td>
+                                <td className="p-4 text-slate-400">Off</td>
+                                <td className="p-4 font-semibold text-rose-600">Night</td>
+                                <td className="p-4">
+                                  <span className={`inline-block px-2.5 py-1 rounded-full text-[10px] font-bold ${
+                                    nurse.shift === 'Morning' ? 'bg-amber-100 text-amber-800 border border-amber-200' :
+                                    nurse.shift === 'Afternoon' ? 'bg-indigo-100 text-indigo-800 border border-indigo-200' :
+                                    nurse.shift === 'Night' ? 'bg-rose-100 text-rose-800 border border-rose-200' :
+                                    'bg-slate-100 text-slate-400'
+                                  }`}>
+                                    {nurse.shift} Shift
+                                  </span>
+                                </td>
+                              </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+
+                  {/* Informational Callout & Shift Legend */}
+                  <div className="bg-indigo-50 border border-indigo-100 rounded-2xl p-4 flex flex-col md:flex-row gap-4 items-start md:items-center justify-between text-xs text-indigo-800">
+                    <div className="space-y-1">
+                      <p className="font-bold">Hospital Duty Cycle Specifications</p>
+                      <p className="text-indigo-600 max-w-xl">Morning Shifts run 06:00 - 14:00. Afternoon Shifts run 14:00 - 22:00. Night Shifts run 22:00 - 06:00. Shifts require visual handoff sign-offs within MedPulse.</p>
+                    </div>
+                    <button 
+                      onClick={() => triggerNotification('Shift adjustment report generated.', 'info')}
+                      className="bg-indigo-600 text-white font-bold py-2 px-4 rounded-xl hover:bg-indigo-750 transition shrink-0"
+                    >
+                      Print Shift Roster
+                    </button>
+                  </div>
+
+                </div>
+              )}
+
+              {/* ----------------- PAGE 4: USER MANAGEMENT PAGE ----------------- */}
+              {currentPage === 'users' && (
+                <div className="space-y-6">
+                  
+                  {/* Action Bar */}
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div>
+                      <h3 className="font-bold text-slate-800 text-lg">Hospital Roster Registry</h3>
+                      <p className="text-xs text-slate-400">Add, configure, and assign credentials for nursing staff</p>
+                    </div>
+                    <button 
+                      onClick={openUserAddModal}
+                      className="bg-teal-500 hover:bg-teal-600 text-white font-bold py-2.5 px-4 rounded-xl shadow-md transition flex items-center space-x-1.5 self-start text-xs"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 4v16m8-8H4" /></svg>
+                      <span>Onboard New Staff</span>
+                    </button>
+                  </div>
+
+                  {/* Table List of Users with Controls */}
+                  <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left border-collapse">
+                        <thead>
+                          <tr className="bg-slate-50 text-xs font-bold text-slate-500 border-b border-slate-100 uppercase">
+                            <th className="p-4">Staff Nurse ID</th>
+                            <th className="p-4">Full Name</th>
+                            <th className="p-4">Role Designation</th>
+                            <th className="p-4">Department Unit</th>
+                            <th className="p-4">Authorized Email</th>
+                            <th className="p-4">Current Status</th>
+                            <th className="p-4 text-center">Roster Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100 text-xs text-slate-600">
+                          {filteredStaff.map((nurse) => (
+                            <tr key={nurse.id} className="hover:bg-slate-50/50 transition">
+                              <td className="p-4 font-mono font-bold text-slate-800">{nurse.id}</td>
+                              <td className="p-4 font-semibold text-slate-900">{nurse.name}</td>
+                              <td className="p-4">{nurse.role}</td>
+                              <td className="p-4">
+                                <span className="bg-slate-100 text-slate-700 px-2.5 py-0.5 rounded font-bold">{nurse.dept}</span>
+                              </td>
+                              <td className="p-4 font-mono">{nurse.email}</td>
+                              <td className="p-4">
+                                <span className={`inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold ${nurse.status === 'On-Duty' ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-400'}`}>
+                                  <span className={`w-1.5 h-1.5 rounded-full ${nurse.status === 'On-Duty' ? 'bg-emerald-500' : 'bg-slate-400'}`}></span>
+                                  <span>{nurse.status}</span>
+                                </span>
+                              </td>
+                              <td className="p-4 text-center space-x-2">
+                                <button 
+                                  onClick={() => openUserEditModal(nurse)}
+                                  className="text-indigo-600 hover:text-indigo-900 font-bold hover:underline"
+                                >
+                                  Edit Info
+                                </button>
+                                <span className="text-slate-300">|</span>
+                                <button 
+                                  onClick={() => {
+                                    if (window.confirm('Are you sure you want to remove this staff nurse?')) {
+                                      deleteUser(nurse.id);
+                                    }
+                                  }}
+                                  className="text-rose-500 hover:text-rose-800 font-bold hover:underline"
+                                >
+                                  Remove
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                          {filteredStaff.length === 0 && (
+                            <tr>
+                              <td colSpan="7" className="p-8 text-center text-slate-400">No nursing staff matching the active filters was found.</td>
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+
+                </div>
+              )}
+
+              {/* ----------------- PAGE 5: PATIENT INFORMATION PAGE ----------------- */}
+              {currentPage === 'patients' && (
+                <div className="space-y-6">
+                  
+                  {/* Quick Patient Selector Header */}
+                  <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+                    {/* Left Patient List */}
+                    <div className="lg:col-span-1 bg-white p-4 rounded-2xl border border-slate-200 shadow-sm space-y-3">
+                      <div className="pb-3 border-b border-slate-100">
+                        <h4 className="font-extrabold text-slate-800 text-sm">Admitted Patients</h4>
+                        <p className="text-[10px] text-slate-400">Click to load medical flowsheets</p>
+                      </div>
+
+                      <div className="space-y-2 max-h-[400px] overflow-y-auto pr-1">
+                        {filteredPatients.map((pat) => {
+                          const isSelected = pat.id === selectedPatient.id;
+                          return (
+                            <div 
+                              key={pat.id}
+                              onClick={() => setSelectedPatientId(pat.id)}
+                              className={`p-3 rounded-xl cursor-pointer border transition text-left ${isSelected ? 'bg-gradient-to-tr from-teal-500/10 to-indigo-500/5 border-teal-400 shadow-sm' : 'border-slate-100 hover:bg-slate-50'}`}
+                            >
+                              <div className="flex justify-between items-start">
+                                <h5 className="font-bold text-slate-800 text-xs truncate max-w-[120px]">{pat.name}</h5>
+                                <span className="text-[9px] font-mono bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded">{pat.id}</span>
+                              </div>
+                              <p className="text-[10px] text-slate-500 mt-0.5 truncate">{pat.diagnosis}</p>
+                              <div className="flex justify-between items-center mt-2 pt-2 border-t border-slate-100/60 text-[9px] text-slate-400">
+                                <span>{pat.bed}</span>
+                                <span className="font-semibold text-slate-600">Vitals: {pat.vitals.bp}</span>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+
+                      <button 
+                        onClick={openPatientAddModal}
+                        className="w-full py-2.5 bg-teal-50 text-teal-700 hover:bg-teal-100 border border-teal-200 text-xs font-bold rounded-xl transition"
+                      >
+                        + Admit New Case
+                      </button>
+                    </div>
+
+                    {/* Right Patient Clinical Sheet Viewer */}
+                    <div className="lg:col-span-3 space-y-6">
+                      
+                      {/* Detailed Profile Information Header Card */}
+                      <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+                        <div className="flex flex-col sm:flex-row justify-between sm:items-center border-b border-slate-100 pb-4 gap-4">
+                          <div className="space-y-1 text-left">
+                            <div className="flex items-center space-x-2">
+                              <h3 className="text-xl font-bold text-slate-800">{selectedPatient.name}</h3>
+                              <span className="bg-teal-100 text-teal-800 font-mono text-xs px-2.5 py-0.5 rounded-full font-bold">{selectedPatient.gender}, {selectedPatient.age} yrs</span>
+                            </div>
+                            <p className="text-xs text-slate-500">Registered Admission ID: <span className="font-mono font-bold text-slate-700">{selectedPatient.id}</span></p>
+                          </div>
+
+                          <div className="flex gap-2">
+                            <button 
+                              onClick={() => openVitalsEditModal(selectedPatient)}
+                              className="bg-indigo-600 hover:bg-indigo-750 text-white font-bold py-2 px-3.5 rounded-xl text-xs transition flex items-center space-x-1.5"
+                            >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+                              <span>Update Vital Signs</span>
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Summary Grid */}
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs text-left">
+                          <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
+                            <span className="text-[10px] text-slate-400 font-bold uppercase block mb-1">Ward Location</span>
+                            <span className="font-extrabold text-slate-800 text-sm">{selectedPatient.bed}</span>
+                          </div>
+                          <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
+                            <span className="text-[10px] text-slate-400 font-bold uppercase block mb-1">Diagnosis</span>
+                            <span className="font-extrabold text-slate-800 text-sm truncate block">{selectedPatient.diagnosis}</span>
+                          </div>
+                          <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
+                            <span className="text-[10px] text-slate-400 font-bold uppercase block mb-1">Attending Physician</span>
+                            <span className="font-extrabold text-slate-800 text-sm block">{selectedPatient.attendingPhysician}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Vitals Visual Monitor Card */}
+                      <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4 text-left">
+                        <div className="flex justify-between items-center pb-2 border-b border-slate-100">
+                          <h4 className="font-bold text-slate-800 text-sm">Real-Time Flowsheet Vital Monitor</h4>
+                          <span className="text-[10px] text-slate-400 font-mono">Last logs recorded: {selectedPatient.vitals.lastUpdated}</span>
+                        </div>
+
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                          {/* Heart Rate Block */}
+                          <div className={`p-4 rounded-xl border text-center space-y-1 ${
+                            getVitalAlertLevel('hr', selectedPatient.vitals.hr) === 'critical' ? 'bg-rose-50 border-rose-300 text-rose-800 animate-pulse' : 'bg-slate-50 border-slate-200'
+                          }`}>
+                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Heart Rate</span>
+                            <span className="text-3xl font-black block">{selectedPatient.vitals.hr} <span className="text-xs font-normal">bpm</span></span>
+                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                              getVitalAlertLevel('hr', selectedPatient.vitals.hr) === 'critical' ? 'bg-rose-200 text-rose-900' : 'bg-emerald-100 text-emerald-800'
+                            }`}>
+                              {getVitalAlertLevel('hr', selectedPatient.vitals.hr) === 'critical' ? '⚠️ ARRYTHMIA RISK' : 'Normal'}
+                            </span>
+                          </div>
+
+                          {/* Blood Pressure Block */}
+                          <div className={`p-4 rounded-xl border text-center space-y-1 ${
+                            getVitalAlertLevel('bp', null, selectedPatient.vitals.bp) === 'warning' ? 'bg-amber-50 border-amber-300 text-amber-800' : 'bg-slate-50 border-slate-200'
+                          }`}>
+                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Blood Pressure</span>
+                            <span className="text-3xl font-black block">{selectedPatient.vitals.bp} <span className="text-xs font-normal">mmHg</span></span>
+                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                              getVitalAlertLevel('bp', null, selectedPatient.vitals.bp) === 'warning' ? 'bg-amber-200 text-amber-900' : 'bg-emerald-100 text-emerald-800'
+                            }`}>
+                              {getVitalAlertLevel('bp', null, selectedPatient.vitals.bp) === 'warning' ? '⚠️ PREHYPERTENSION' : 'Normal'}
+                            </span>
+                          </div>
+
+                          {/* Temperature Block */}
+                          <div className={`p-4 rounded-xl border text-center space-y-1 ${
+                            getVitalAlertLevel('temp', selectedPatient.vitals.temp) === 'warning' ? 'bg-rose-50 border-rose-300 text-rose-800' : 'bg-slate-50 border-slate-200'
+                          }`}>
+                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Temperature</span>
+                            <span className="text-3xl font-black block">{selectedPatient.vitals.temp} <span className="text-xs font-normal">°C</span></span>
+                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                              getVitalAlertLevel('temp', selectedPatient.vitals.temp) === 'warning' ? 'bg-rose-200 text-rose-900' : 'bg-emerald-100 text-emerald-800'
+                            }`}>
+                              {getVitalAlertLevel('temp', selectedPatient.vitals.temp) === 'warning' ? '⚠️ PYREXIA FEVER' : 'Normal'}
+                            </span>
+                          </div>
+
+                          {/* SpO2 Oxygenation Block */}
+                          <div className={`p-4 rounded-xl border text-center space-y-1 ${
+                            getVitalAlertLevel('spo2', selectedPatient.vitals.spo2) === 'critical' ? 'bg-rose-50 border-rose-300 text-rose-800 animate-pulse' : 'bg-slate-50 border-slate-200'
+                          }`}>
+                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">SpO2 Oxygen</span>
+                            <span className="text-3xl font-black block">{selectedPatient.vitals.spo2} <span className="text-xs font-normal">%</span></span>
+                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                              getVitalAlertLevel('spo2', selectedPatient.vitals.spo2) === 'critical' ? 'bg-rose-200 text-rose-900' : 'bg-emerald-100 text-emerald-800'
+                            }`}>
+                              {getVitalAlertLevel('spo2', selectedPatient.vitals.spo2) === 'critical' ? '⚠️ HYPOXIA ALERT' : 'Normal'}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Clinical History & Flowsheet Nursing Notes */}
+                      <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm text-left space-y-4">
+                        <h4 className="font-bold text-slate-800 text-sm pb-2 border-b border-slate-100">Chronic Co-morbidities & Diagnostic History</h4>
+                        <div className="space-y-2">
+                          {selectedPatient.history.map((hist, index) => (
+                            <div key={index} className="flex items-center space-x-2 text-xs text-slate-600 bg-slate-50 p-2.5 rounded-lg border border-slate-100">
+                              <span className="w-1.5 h-1.5 rounded-full bg-indigo-500"></span>
+                              <span>{hist}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                    </div>
+                  </div>
+
+                </div>
+              )}
+
+              {/* ----------------- PAGE 6: GROUP BIOGRAPHY PAGE ----------------- */}
+              {currentPage === 'bio' && (
+                <div className="space-y-6 text-left">
+                  
+                  {/* Hero banner for Group Bio */}
+                  <div className="bg-gradient-to-r from-indigo-900 to-slate-900 rounded-2xl p-6 text-white shadow-md">
+                    <h3 className="text-2xl font-black">Nursing Informatics Collaborative</h3>
+                    <p className="text-indigo-200 text-xs mt-1">Class Section: BS Nursing - NI Sec 04-A • Group Assignment Prototype</p>
+                    <p className="text-indigo-100/80 text-sm mt-3 max-w-2xl">
+                      We present a fully structured mock implementation of a Nursing Information System (NIS), demonstrating electronic health charting, shift management algorithms, and clinical alerts under high data volumes.
+                    </p>
+                  </div>
+
+                  {/* 4-Member Grid layout matching visual specs */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    
+                    {/* Member 1 Profile */}
+                    <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm space-y-4 hover:shadow transition">
+                      <div className="flex items-center space-x-4">
+                        <div className="w-16 h-16 bg-teal-100 border border-teal-200 text-teal-700 font-black rounded-2xl flex items-center justify-center text-xl shadow-inner shrink-0">
+                          SJ
+                        </div>
+                        <div>
+                          <h4 className="text-base font-extrabold text-slate-800">Sarah Jenkins, BSN</h4>
+                          <p className="text-xs text-indigo-600 font-bold">Group Leader • Informatics Lead Developer</p>
+                          <p className="text-[10px] text-slate-400 mt-0.5">Contribution: Interface Architecture & Shift Scheduling Logic</p>
+                        </div>
+                      </div>
+                      <div className="space-y-2 text-xs text-slate-600 border-t border-slate-100 pt-3">
+                        <p><strong className="text-slate-800 block text-[10px] uppercase font-black tracking-wider">Lessons Learned in Nursing Informatics:</strong> Understanding how critical human factors and systems design impact the charting workload of clinical staff. Bad UI causes charting burnout.</p>
+                        <p><strong className="text-slate-800 block text-[10px] uppercase font-black tracking-wider">Clinical Reflection:</strong> "Leveraging automated clinical alarms shouldn't generate alert fatigue; tech must synthesize vitals into actionable insights, not simple noisy noise."</p>
+                      </div>
+                    </div>
+
+                    {/* Member 2 Profile */}
+                    <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm space-y-4 hover:shadow transition">
+                      <div className="flex items-center space-x-4">
+                        <div className="w-16 h-16 bg-indigo-100 border border-indigo-200 text-indigo-700 font-black rounded-2xl flex items-center justify-center text-xl shadow-inner shrink-0">
+                          MC
+                        </div>
+                        <div>
+                          <h4 className="text-base font-extrabold text-slate-800">Michael Chen, RN</h4>
+                          <p className="text-xs text-indigo-600 font-bold">UI/UX Clinical Designer</p>
+                          <p className="text-[10px] text-slate-400 mt-0.5">Contribution: Wireframe Layouts & Color Harmonies</p>
+                        </div>
+                      </div>
+                      <div className="space-y-2 text-xs text-slate-600 border-t border-slate-100 pt-3">
+                        <p><strong className="text-slate-800 block text-[10px] uppercase font-black tracking-wider">Lessons Learned in Nursing Informatics:</strong> The importance of consistency in clinical symbology. Color thresholds must match real physiological triggers immediately.</p>
+                        <p><strong className="text-slate-800 block text-[10px] uppercase font-black tracking-wider">Clinical Reflection:</strong> "A nurse in a high-intensity trauma ward has millisecond windows to read an EHR. Good layouts reduce cognitive drag and directly save patient lives."</p>
+                      </div>
+                    </div>
+
+                    {/* Member 3 Profile */}
+                    <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm space-y-4 hover:shadow transition">
+                      <div className="flex items-center space-x-4">
+                        <div className="w-16 h-16 bg-slate-100 border border-slate-200 text-slate-700 font-black rounded-2xl flex items-center justify-center text-xl shadow-inner shrink-0">
+                          AR
+                        </div>
+                        <div>
+                          <h4 className="text-base font-extrabold text-slate-800">Amanda Rodriguez, RN</h4>
+                          <p className="text-xs text-indigo-600 font-bold">Informatics Researcher & QA Specialist</p>
+                          <p className="text-[10px] text-slate-400 mt-0.5">Contribution: Nursing Care Plan Validation & Metric Logic</p>
+                        </div>
+                      </div>
+                      <div className="space-y-2 text-xs text-slate-600 border-t border-slate-100 pt-3">
+                        <p><strong className="text-slate-800 block text-[10px] uppercase font-black tracking-wider">Lessons Learned in Nursing Informatics:</strong> Standardized terminologies (NANDA, NIC, NOC) are essential to maintain unified medical data transfers.</p>
+                        <p><strong className="text-slate-800 block text-[10px] uppercase font-black tracking-wider">Clinical Reflection:</strong> "Computers don't replace clinical empathy. They free the clinical professional from manual labor so we can spend more real time holding the patient's hand."</p>
+                      </div>
+                    </div>
+
+                    {/* Member 4 Profile */}
+                    <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm space-y-4 hover:shadow transition">
+                      <div className="flex items-center space-x-4">
+                        <div className="w-16 h-16 bg-amber-100 border border-amber-200 text-amber-700 font-black rounded-2xl flex items-center justify-center text-xl shadow-inner shrink-0">
+                          DK
+                        </div>
+                        <div>
+                          <h4 className="text-base font-extrabold text-slate-800">David Kim, BSN</h4>
+                          <p className="text-xs text-indigo-600 font-bold">Database & HIPAA Integration Planner</p>
+                          <p className="text-[10px] text-slate-400 mt-0.5">Contribution: Mock EHR Data Structures & System Flowcharts</p>
+                        </div>
+                      </div>
+                      <div className="space-y-2 text-xs text-slate-600 border-t border-slate-100 pt-3">
+                        <p><strong className="text-slate-800 block text-[10px] uppercase font-black tracking-wider">Lessons Learned in Nursing Informatics:</strong> Clinical cyber security is not optional. Patient records must remain highly confidential yet instantly reachable by triage.</p>
+                        <p><strong className="text-slate-800 block text-[10px] uppercase font-black tracking-wider">Clinical Reflection:</strong> "Transitioning from paper nursing logs to modern database systems reduces diagnostic latency by up to 40%. The future of medicine lies in data science."</p>
+                      </div>
+                    </div>
+
+                  </div>
+                </div>
+              )}
+
+            </div>
+          </main>
+        </div>
+      )}
+
+      {/* ----------------- MODAL DIALOGS FOR MUTABLE ACTIONS ----------------- */}
+      {/* Onboard / Edit Nurse Staff Modal */}
+      {isUserModalOpen && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-100 text-left space-y-4">
+            <div>
+              <h3 className="font-extrabold text-slate-800 text-lg">{editingUser ? 'Edit Nurse Profile' : 'Onboard New Staff Nurse'}</h3>
+              <p className="text-xs text-slate-400">Modify clinical credentials & roster assignments</p>
+            </div>
+
+            <form onSubmit={saveUserSubmit} className="space-y-4">
+              <div>
+                <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Full Professional Name (with credentials)</label>
+                <input 
+                  type="text"
+                  required
+                  placeholder="e.g. Clara Barton, BSN, RN"
+                  value={userForm.name}
+                  onChange={(e) => setUserForm({ ...userForm, name: e.target.value })}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-teal-400 focus:bg-white"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Assigned Department</label>
+                  <select 
+                    value={userForm.dept}
+                    onChange={(e) => setUserForm({ ...userForm, dept: e.target.value })}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-teal-400 focus:bg-white"
+                  >
+                    <option value="ICU">ICU</option>
+                    <option value="Emergency">Emergency</option>
+                    <option value="Pediatrics">Pediatrics</option>
+                    <option value="Clinical IT">Clinical IT</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Default Duty Shift</label>
+                  <select 
+                    value={userForm.shift}
+                    onChange={(e) => setUserForm({ ...userForm, shift: e.target.value })}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-teal-400 focus:bg-white"
+                  >
+                    <option value="Morning">Morning Shift</option>
+                    <option value="Afternoon">Afternoon Shift</option>
+                    <option value="Night">Night Shift</option>
+                    <option value="Off">Duty Off</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Professional Email</label>
+                <input 
+                  type="email"
+                  required
+                  placeholder="name@hospital.org"
+                  value={userForm.email}
+                  onChange={(e) => setUserForm({ ...userForm, email: e.target.value })}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-teal-400 focus:bg-white"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Roster Activity Status</label>
+                <select 
+                  value={userForm.status}
+                  onChange={(e) => setUserForm({ ...userForm, status: e.target.value })}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-teal-400 focus:bg-white"
+                >
+                  <option value="On-Duty">On-Duty</option>
+                  <option value="Off-Duty">Off-Duty / Leave</option>
+                </select>
+              </div>
+
+              <div className="pt-2 flex justify-end space-x-2">
+                <button 
+                  type="button" 
+                  onClick={() => setIsUserModalOpen(false)}
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition"
+                >
+                  Discard
+                </button>
+                <button 
+                  type="submit"
+                  className="px-4 py-2 bg-teal-500 hover:bg-teal-600 text-white text-xs font-bold rounded-xl transition"
+                >
+                  Save Profile Configuration
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Vital Sign Flowsheet Update Modal */}
+      {isVitalsModalOpen && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-sm w-full p-6 shadow-2xl border border-slate-100 text-left space-y-4">
+            <div>
+              <h3 className="font-extrabold text-slate-800 text-base">Record New Flowsheet Vitals</h3>
+              <p className="text-xs text-slate-400">Instantly update patient physiological indicators</p>
+            </div>
+
+            <form onSubmit={saveVitalsSubmit} className="space-y-4">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Heart Rate (bpm)</label>
+                  <input 
+                    type="number"
+                    required
+                    min="30"
+                    max="220"
+                    value={vitalsForm.hr}
+                    onChange={(e) => setVitalsForm({ ...vitalsForm, hr: e.target.value })}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-teal-400 focus:bg-white"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Blood Pressure</label>
+                  <input 
+                    type="text"
+                    required
+                    placeholder="120/80"
+                    value={vitalsForm.bp}
+                    onChange={(e) => setVitalsForm({ ...vitalsForm, bp: e.target.value })}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-teal-400 focus:bg-white"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Temperature (°C)</label>
+                  <input 
+                    type="number"
+                    step="0.1"
+                    required
+                    min="34"
+                    max="43"
+                    value={vitalsForm.temp}
+                    onChange={(e) => setVitalsForm({ ...vitalsForm, temp: e.target.value })}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-teal-400 focus:bg-white"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Oxygen SpO2 (%)</label>
+                  <input 
+                    type="number"
+                    required
+                    min="50"
+                    max="100"
+                    value={vitalsForm.spo2}
+                    onChange={(e) => setVitalsForm({ ...vitalsForm, spo2: e.target.value })}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-teal-400 focus:bg-white"
+                  />
+                </div>
+              </div>
+
+              <div className="pt-2 flex justify-end space-x-2">
+                <button 
+                  type="button" 
+                  onClick={() => setIsVitalsModalOpen(false)}
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition"
+                >
+                  Cancel
+                </button>
+                <button 
+                  type="submit"
+                  className="px-4 py-2 bg-teal-500 hover:bg-teal-600 text-white text-xs font-bold rounded-xl transition"
+                >
+                  Log Vital Update
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* New Patient Registration Modal */}
+      {isPatientModalOpen && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-100 text-left space-y-4">
+            <div>
+              <h3 className="font-extrabold text-slate-800 text-base">Admit New Emergency Patient</h3>
+              <p className="text-xs text-slate-400">Initialize electronic health record & assign to ward</p>
+            </div>
+
+            <form onSubmit={savePatientSubmit} className="space-y-4">
+              <div>
+                <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Full Patient Name</label>
+                <input 
+                  type="text"
+                  required
+                  placeholder="Johnathan Harker"
+                  value={patientForm.name}
+                  onChange={(e) => setPatientForm({ ...patientForm, name: e.target.value })}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-teal-400 focus:bg-white"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Age</label>
+                  <input 
+                    type="number"
+                    required
+                    placeholder="45"
+                    value={patientForm.age}
+                    onChange={(e) => setPatientForm({ ...patientForm, age: e.target.value })}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-teal-400 focus:bg-white"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Assigned Bed Location</label>
+                  <input 
+                    type="text"
+                    required
+                    placeholder="e.g. Ward B-02"
+                    value={patientForm.bed}
+                    onChange={(e) => setPatientForm({ ...patientForm, bed: e.target.value })}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-teal-400 focus:bg-white"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Admitting Medical Diagnosis</label>
+                <input 
+                  type="text"
+                  required
+                  placeholder="e.g. Diaphoresis & Angina pectoris"
+                  value={patientForm.diagnosis}
+                  onChange={(e) => setPatientForm({ ...patientForm, diagnosis: e.target.value })}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-teal-400 focus:bg-white"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Attending Clinical Doctor</label>
+                <input 
+                  type="text"
+                  placeholder="Dr. Gregory House, MD"
+                  value={patientForm.attendingPhysician}
+                  onChange={(e) => setPatientForm({ ...patientForm, attendingPhysician: e.target.value })}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-teal-400 focus:bg-white"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Comorbidities (Comma separated)</label>
+                <input 
+                  type="text"
+                  placeholder="Type 2 Diabetes, NKDA, Chronic Asthma"
+                  value={patientForm.history}
+                  onChange={(e) => setPatientForm({ ...patientForm, history: e.target.value })}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-teal-400 focus:bg-white"
+                />
+              </div>
+
+              <div className="pt-2 flex justify-end space-x-2">
+                <button 
+                  type="button" 
+                  onClick={() => setIsPatientModalOpen(false)}
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition"
+                >
+                  Discard Registration
+                </button>
+                <button 
+                  type="submit"
+                  className="px-4 py-2 bg-teal-500 hover:bg-teal-600 text-white text-xs font-bold rounded-xl transition"
+                >
+                  Admit Case
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+    </div>
+  );
+}
